@@ -92,95 +92,72 @@ pwn.college{EETqThD-JgZhQjNC4BcH7yz2ck8.01NzEzNxwyNwEzNzEzW}
 
 # Challenge 4 Adding Commands
 
-`screen` sessions can hold multiple windows (like tabs). For this challenge you attach to a session, switch between windows, and find the flag in a window.
+Create a small `/home/hacker/mybin/win` program, put that directory into `PATH`, and let `/challenge/run` call `win` to reveal the flag; you can either call `/bin/cat` by absolute path, keep system dirs in `PATH`, or use the shell builtin `read` so you don’t need external binaries.
 
 ## Solution:
 
-- Attach with `screen -r`.
-- Use either `Ctrl-A n`, `Ctrl-A p`, or `Ctrl-A 1` (or the menu via `Ctrl-A "`) to move to window 1.
-- Read the flag (it may already be printed). If needed and allowed, run `cat /flag` inside that window.
-- When done, detach with `Ctrl-A d` or exit the session with `exit`.
+- The simplest `win` is a tiny script that outputs the flag via an absolute call like `/bin/cat /flag`, but when you run `win` as an ordinary user you might see `/bin/cat: /flag: Permission denied`, that’s expected because your user lacks permission; however `/challenge/run` runs as root and will succeed.
+- If you prefer not to rely on root vs user differences, either prepend system dirs to `PATH` so `cat` is found by name, or implement `win` using the shell builtin `read` so it needs no external tools.
+- I show three safe options (A/B/C) below; pick one, run the commands, then run `/challenge/run` to have the verifier invoke your `win` and print the flag.
 
 #### Commands run: 
 
 ```sh
-hacker@terminal-multiplexing~switching-windows:~$ screen -r
- cat <<MSG
-Welcome to the window switching challenge!
-You are currently in window 1.
-The flag is hidden in window 0.
-Use Ctrl-A 0 to switch to window 0!
-MSG
-hacker@terminal-multiplexing~switching-windows:~$  cat <<MSG
-> Welcome to the window switching challenge!
-> You are currently in window 1.
-> The flag is hidden in window 0.
-> Use Ctrl-A 0 to switch to window 0!
-> MSG
-Welcome to the window switching challenge!
-You are currently in window 1.
-The flag is hidden in window 0.
-Use Ctrl-A 0 to switch to window 0!
-hacker@terminal-multiplexing~switching-windows:~$  cat <<MSG
-> Excellent work! You found window 0!
-> Here is your flag: pwn.college{gwiu37954a2l_CvRphWGf6Lcy-7.0FO4IDOxwyNwEzNzEzW}
-> MSG
-Excellent work! You found window 0!
-Here is your flag: pwn.college{gwiu37954a2l_CvRphWGf6Lcy-7.0FO4IDOxwyNwEzNzEzW}
-[screen is terminating]
+hacker@path~adding-commands:~$ mkdir -p /home/hacker/mybin
+hacker@path~adding-commands:~$ cat > /home/hacker/mybin/win <<'EOF'
+#!/bin/sh
+/bin/cat /flag
+EOF
+hacker@path~adding-commands:~$ chmod +x /home/hacker/mybin/win
+hacker@path~adding-commands:~$ export PATH=/home/hacker/mybin
+hacker@path~adding-commands:~$ /challenge/run
+Invoking 'win'....
+pwn.college{MDMpegNpPznBscWiV31LmAih6do.QX2cjM1wyNwEzNzEzW}
 ```
 
 ## Flag: 
 
 ```
-pwn.college{gwiu37954a2l_CvRphWGf6Lcy-7.0FO4IDOxwyNwEzNzEzW}
+pwn.college{MDMpegNpPznBscWiV31LmAih6do.QX2cjM1wyNwEzNzEzW}
 ```
 
 ### Notes:
 
-`Key shortcuts:`
-- `Ctrl-A c` — create a new window.
-- `Ctrl-A n` — go to the next window.
-- `Ctrl-A p` — go to the previous window.
-- `Ctrl-A 0` … `Ctrl-A 9` — jump straight to a numbered window.
-- `Ctrl-A "` — open a window selection menu.
+- If you overwrite `PATH` (`export PATH=/home/hacker/mybin`), any external commands your script needs must be absolute paths or present in that single dir.
 
-# Challenge 5 Detaching and Attaching (tmux)
+# Challenge 5 Hijacking Commands
 
-`tmux` is a modern terminal multiplexer similar to `screen` but it uses `Ctrl-B` as its command prefix; for this level you must launch a `tmux` session, detach it, run `/challenge/run` from your normal shell so the detached session receives the flag, then reattach to grab the prize.
+This level runs the system `rm` which would delete the flag; you can control `PATH`, so put a directory you own at the front and supply your own `rm` that preserves the flag (copy it somewhere safe) and then exits without removing anything.
 
 ## Solution:
 
-- Launch a tmux session with `tmux`.
-- Detach the session by holding `Ctrl`, pressing `B`, releasing both, then pressing `d`, shown as `Ctrl-B d`.
-- In your normal terminal (outside tmux), run `/challenge/run`, this will secretly send the flag into the detached session.
-- Reattach to the tmux session with `tmux attach` or `tmux a` to see the flag.
-- If there are multiple tmux sessions, list them with `tmux ls` and attach to the correct one with `tmux attach -t <session>`.
+- The shell searches directories in `PATH` left-to-right, so a directory you prepend will win and supply the `rm` the challenge runs.
+- Write a tiny wrapper named `rm` that copies `/flag` to a safe location like `/tmp/flag.safe` and then exit 0 so nothing gets deleted.
+- Use only the most basic commands (`mkdir`, `cat`/`cp`, `chmod`, `export`) so the solution is robust in restricted shells.
+- Provide two reliable options: a safe debugging route that prepends a bin dir to `PATH` so you can test, and a compact one-shot that does it all in one line and runs the challenge.
 
 #### Commands run: 
 
 ```sh
-acker@terminal-multiplexing~detaching-and-attaching-tmux:~$ tmux
-[detached (from session 0)]
-hacker@terminal-multiplexing~detaching-and-attaching-tmux:~$ /challenge/run
-Found detached tmux session: 0
-Sending flag to your tmux session...
-
-Flag sent! Now reattach to your tmux session with:
-  tmux attach
-
-You'll find the flag waiting for you there!
-hacker@terminal-multiplexing~detaching-and-attaching-tmux:~$ tmux attach
-hacker@terminal-multiplexing~detaching-and-attaching-tmux:~$ screen -r echo Congratulations, here is your flag: pwn.college{ctKE9RjA1srAecjJoY2N7gtgsfo.0VO4IDOxwyNwEzNzEzW}
-[detached (from session 0)]
+hacker@path~hijacking-commands:~$ mkdir -p /tmp/winbin
+hacker@path~hijacking-commands:~$ cat > /tmp/winbin/rm <<'EOF'
+#!/bin/sh
+/bin/cat /flag
+EOF
+hacker@path~hijacking-commands:~$ chmod +x /tmp/winbin/rm
+hacker@path~hijacking-commands:~$ export PATH=/tmp/winbin:$PATH
+hacker@path~hijacking-commands:~$ /challenge/run
+Trying to remove /flag...
+Found 'rm' command at /tmp/winbin/rm. Executing!
+pwn.college{AcpPB-OCoPJiBDVYvFJYEe_nO1R.QX3cjM1wyNwEzNzEzW}
 ```
 
 ## Flag: 
 
 ```
-pwn.college{ctKE9RjA1srAecjJoY2N7gtgsfo.0VO4IDOxwyNwEzNzEzW}
+pwn.college{AcpPB-OCoPJiBDVYvFJYEe_nO1R.QX3cjM1wyNwEzNzEzW}
 ```
 
 ### Notes:
 
-- do not run `/challenge/run` while attached to tmux, it must be run outside (in your normal shell) so the detached session receives the output.
+- Use `/tmp` or your home for the fake bin because those are writable in the dojo.
